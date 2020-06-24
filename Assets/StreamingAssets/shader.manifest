@@ -1,9 +1,9 @@
 ManifestFileVersion: 0
-CRC: 1364830190
+CRC: 1986681413
 Hashes:
   AssetFileHash:
     serializedVersion: 2
-    Hash: a39cd06db0818cfb36b34c6a48adb900
+    Hash: 86db368b3908111a7d3bfc13b7bfe59a
   TypeTreeHash:
     serializedVersion: 2
     Hash: 7e9ee104d6bb707fb2602b751e6f78b1
@@ -13,6 +13,7 @@ ClassTypes:
   Script: {instanceID: 0}
 Assets:
 - Assets/GameData/Shaders/Water.shader
+- Assets/GameData/Shaders/benghuai.shader
 - Assets/GameData/Shaders/Skybox.shader
 - Assets/GameData/Shaders/Xray.shader
 Dependencies: []

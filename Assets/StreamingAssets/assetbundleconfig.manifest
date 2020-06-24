@@ -1,0 +1,16 @@
+ManifestFileVersion: 0
+CRC: 2014464470
+Hashes:
+  AssetFileHash:
+    serializedVersion: 2
+    Hash: b188b43799239825314494cf36c08011
+  TypeTreeHash:
+    serializedVersion: 2
+    Hash: 5ad585dd02dfb5016c0dad519eab8f49
+HashAppended: 0
+ClassTypes:
+- Class: 49
+  Script: {instanceID: 0}
+Assets:
+- Assets/GameData/Data/ABData/AssetBundleConfig.bytes
+Dependencies: []
