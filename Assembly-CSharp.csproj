@@ -56,6 +56,12 @@
      <Compile Include="Assets\GameData\Modle\benghuai\AutoRotation.cs" />
      <Compile Include="Assets\Scripts\AssetBundleConfig.cs" />
      <Compile Include="Assets\Scripts\CRC32.cs" />
+     <Compile Include="Assets\Scripts\GameStart.cs" />
+     <Compile Include="Assets\Scripts\Mgr\ABMgr.cs" />
+     <Compile Include="Assets\Scripts\Mgr\ClassObjPool.cs" />
+     <Compile Include="Assets\Scripts\Mgr\ObjMgr.cs" />
+     <Compile Include="Assets\Scripts\Mgr\ResMgr.cs" />
+     <Compile Include="Assets\Scripts\Mgr\Singleton.cs" />
      <None Include="Assets\GameData\Shaders\Water.shader" />
      <None Include="Assets\GameData\Shaders\benghuai.shader" />
      <None Include="Assets\AssetBundleConfig.xml" />
