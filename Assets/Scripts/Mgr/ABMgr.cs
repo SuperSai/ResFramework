@@ -128,7 +128,6 @@ public class ABMgr : Singleton<ABMgr>
     public void ReleaseAsset(ResourceItem item)
     {
         if (item == null) return;
-
         if (item._dependAssetBundle != null && item._dependAssetBundle.Count > 0)
         {
             for (int i = 0; i < item._dependAssetBundle.Count; i++)
@@ -137,7 +136,6 @@ public class ABMgr : Singleton<ABMgr>
             }
         }
         UnLoadAssetBundle(item._assetName);
-
     }
 
     /// <summary>
