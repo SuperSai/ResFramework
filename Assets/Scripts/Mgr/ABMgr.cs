@@ -135,7 +135,7 @@ public class ABMgr : Singleton<ABMgr>
                 UnLoadAssetBundle(item._dependAssetBundle[i]);
             }
         }
-        UnLoadAssetBundle(item._assetName);
+        UnLoadAssetBundle(item._abName);
     }
 
     /// <summary>
@@ -188,14 +188,56 @@ public class AssetBundleItem
 
 public class ResourceItem
 {
-    //资源路径的CRC
+    /// <summary>
+    /// 资源路径的CRC
+    /// </summary>
     public uint _crc = 0;
-    //资源文件名
+    /// <summary>
+    /// 资源文件名
+    /// </summary>
     public string _assetName = string.Empty;
-    //资源所在的AssetBundle名字
+    /// <summary>
+    /// 资源所在的AssetBundle名字
+    /// </summary>
     public string _abName = string.Empty;
-    //资源所依赖的AssetBundle
+    /// <summary>
+    /// 资源所依赖的AssetBundle
+    /// </summary>
     public List<string> _dependAssetBundle = null;
-    //资源加载完的AB包
+    /// <summary>
+    /// 资源加载完的AB包
+    /// </summary>
     public AssetBundle _assetBundle = null;
+    //******************************* 下面是资源相关 ***********************************
+    /// <summary>
+    /// 资源对象
+    /// </summary>
+    public Object _obj = null;
+    /// <summary>
+    /// 资源唯一标识
+    /// </summary>
+    public int _guid = 0;
+    /// <summary>
+    /// 资源最后使用的时间
+    /// </summary>
+    public float _lastUseTime = 0.0f;
+    /// <summary>
+    /// 引用计数
+    /// </summary>
+    protected int _refCount = 0;
+    /// <summary>
+    /// 引用计数
+    /// </summary>
+    public int RefCount
+    {
+        get { return _refCount; }
+        set
+        {
+            _refCount = value;
+            if (_refCount < 0)
+            {
+                Debug.LogError("ReCount < 0 :" + _refCount + " , " + (_obj != null ? _obj.name : "name is null"));
+            }
+        }
+    }
 }
