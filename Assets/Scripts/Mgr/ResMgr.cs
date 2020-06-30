@@ -2,9 +2,62 @@
 using System.Collections.Generic;
 using UnityEngine;
 
+/// <summary>
+/// 加载优先级
+/// </summary>
+public enum LoadResPriority
+{
+    RES_HIGHT = 0,//最高优先级
+    RES_MIDDLE,//一般优先级
+    RES_SLOW,//低优先级
+    RES_NUM,
+}
+
+public class AsyncCallBack
+{
+    /// <summary>
+    /// 加载完成的回调
+    /// </summary>
+    public OnAsyncObjFinish dealFinish = null;
+    /// <summary>
+    /// 回调参数
+    /// </summary>
+    public object param1 = null, param2 = null, param3 = null;
+    public void Reset()
+    {
+        dealFinish = null;
+        param1 = null;
+        param2 = null;
+        param3 = null;
+    }
+}
+
+public class AsyncLoadResParam
+{
+    public List<AsyncCallBack> callBackList = new List<AsyncCallBack>();
+    public uint crc;
+    public string path;
+    /// <summary>
+    /// 是否是一张图片
+    /// </summary>
+    public bool isSprite = false;
+    public LoadResPriority priority = LoadResPriority.RES_SLOW;
+
+    public void Reset()
+    {
+        crc = 0;
+        path = "";
+        isSprite = false;
+        priority = LoadResPriority.RES_SLOW;
+        callBackList.Clear();
+    }
+}
+
+public delegate void OnAsyncObjFinish(string path, Object obj, object param1 = null, object param2 = null, object param3 = null);
+
 public class ResMgr : Singleton<ResMgr>
 {
-
+    public bool _loadFromAssetBundle = false;
     /// <summary>
     /// 缓存使用的资源列表
     /// </summary>
@@ -13,8 +66,34 @@ public class ResMgr : Singleton<ResMgr>
     /// 缓存引用计数为零的资源列表，达到缓存最大的时候释放这个列表里面最早没用的资源
     /// </summary>
     protected CMapList<ResourceItem> _noRefrenceAssetMapList = new CMapList<ResourceItem>();
+    /// <summary>
+    /// 中间类，回调类的类对象池
+    /// </summary>
+    protected ClassObjPool<AsyncLoadResParam> _asyncLoadResParamPool = new ClassObjPool<AsyncLoadResParam>(50);
+    protected ClassObjPool<AsyncCallBack> _asyncCallBackPool = new ClassObjPool<AsyncCallBack>(100);
 
-    public bool _loadFromAssetBundle = false;
+    //Mono脚本
+    protected MonoBehaviour _startMono;
+    //正在异步加载的资源列表
+    protected List<AsyncLoadResParam>[] _loadingAssetList = new List<AsyncLoadResParam>[(int)LoadResPriority.RES_NUM];
+    //正在异步加载的Dic
+    protected Dictionary<uint, AsyncLoadResParam> _loadingAssetDic = new Dictionary<uint, AsyncLoadResParam>();
+    /// <summary>
+    /// 最長连续卡着加载资源的时间，单位微秒
+    /// </summary>
+    private const long MAX_LOAD_RES_TIME = 200000;
+
+
+    public void Init(MonoBehaviour mono)
+    {
+        for (int i = 0; i < (int)LoadResPriority.RES_NUM; i++)
+        {
+            _loadingAssetList[i] = new List<AsyncLoadResParam>();
+        }
+        _startMono = mono;
+        //启动协程
+        _startMono.StartCoroutine(AsyncLoader());
+    }
 
     /// <summary>
     /// 同步资源加载，外部直接调用，仅加载不需要实例化的资源，例如:Texture，音频等等
@@ -150,7 +229,14 @@ public class ResMgr : Singleton<ResMgr>
         //释放AB引用
         ABMgr.Ins.ReleaseAsset(item);
 
-        if (item._obj != null) item._obj = null;
+        if (item._obj != null)
+        {
+            item._obj = null;
+#if UNITY_EDITOR
+            Resources.UnloadUnusedAssets();
+#endif
+        }
+
     }
 
 #if UNITY_EDITOR
@@ -175,6 +261,135 @@ public class ResMgr : Singleton<ResMgr>
         }
         return item;
     }
+
+    /// <summary>
+    /// 异步加载资源,仅仅是不需要实例化的资源，例如音频，图片等等
+    /// </summary>
+    public void AsyncLoadResource(string path, OnAsyncObjFinish dealFinish, LoadResPriority priority, uint crc = 0, object param1 = null, object param2 = null, object param3 = null)
+    {
+        if (crc == 0)
+        {
+            crc = CRC32.GetCRC32(path);
+        }
+        ResourceItem item = GetCancheResourceItem(crc);
+        if (item != null)
+        {
+            if (dealFinish != null)
+            {
+                dealFinish(path, item._obj, param1, param2, param3);
+            }
+            return;
+        }
+        //判断是否在加载中
+        AsyncLoadResParam param = null;
+        if (!_loadingAssetDic.TryGetValue(crc, out param) || param == null)
+        {
+            param = _asyncLoadResParamPool.Spawn(true);
+            param.crc = crc;
+            param.path = path;
+            param.priority = priority;
+            _loadingAssetDic.Add(crc, param);
+            _loadingAssetList[(int)priority].Add(param);
+        }
+
+        //往回调列表里面加回调
+        AsyncCallBack callBack = _asyncCallBackPool.Spawn(true);
+        callBack.dealFinish = dealFinish;
+        callBack.param1 = param1;
+        callBack.param2 = param2;
+        callBack.param3 = param3;
+        param.callBackList.Add(callBack);
+    }
+
+    /// <summary>
+    /// 异步加载
+    /// </summary>
+    IEnumerator AsyncLoader()
+    {
+        List<AsyncCallBack> callBackList = null;
+        //上一次yield的时间
+        long lastYiledTime = System.DateTime.Now.Ticks;
+        while (true)
+        {
+            bool haveYield = false;
+            for (int i = 0; i < (int)LoadResPriority.RES_NUM; i++)
+            {
+                List<AsyncLoadResParam> loadingList = _loadingAssetList[i];
+                if (loadingList.Count <= 0) continue;
+                AsyncLoadResParam loadingItem = loadingList[0];
+                loadingList.RemoveAt(0);
+                callBackList = loadingItem.callBackList;
+
+                Object obj = null;
+                ResourceItem item = null;
+#if UNITY_EDITOR
+                if (!_loadFromAssetBundle)
+                {
+                    obj = LoadAssetByEditor<Object>(loadingItem.path);
+                    //模拟异步加载
+                    yield return new WaitForSeconds(0.5f);
+
+                    item = ABMgr.Ins.FingResourceItem(loadingItem.crc);
+                }
+#endif
+                if (obj == null)
+                {
+                    item = ABMgr.Ins.LoadResAssetBundle(loadingItem.crc);
+                    if (item != null && item._assetBundle != null)
+                    {
+                        AssetBundleRequest abRequest = null;
+                        if (loadingItem.isSprite)
+                        {
+                            abRequest = item._assetBundle.LoadAssetAsync<Sprite>(item._assetName);
+                        }
+                        else
+                        {
+                            abRequest = item._assetBundle.LoadAssetAsync(item._assetName);
+                        }
+                        yield return abRequest;
+                        if (abRequest.isDone)
+                        {
+                            obj = abRequest.asset;
+                        }
+                        lastYiledTime = System.DateTime.Now.Ticks;
+                    }
+                }
+
+                CacheResource(loadingItem.path, ref item, loadingItem.crc, obj, callBackList.Count);
+
+                for (int j = 0; j < callBackList.Count; j++)
+                {
+                    AsyncCallBack callBack = callBackList[i];
+                    if (callBack != null && callBack.dealFinish != null)
+                    {
+                        callBack.dealFinish(loadingItem.path, obj, callBack.param1, callBack.param2, callBack.param3);
+                        callBack.dealFinish = null;
+                    }
+                    callBack.Reset();
+                    _asyncCallBackPool.Recycle(callBack);
+                }
+
+                obj = null;
+                callBackList.Clear();
+                _loadingAssetDic.Remove(loadingItem.crc);
+                loadingItem.Reset();
+                _asyncLoadResParamPool.Recycle(loadingItem);
+
+                if (System.DateTime.Now.Ticks - lastYiledTime > MAX_LOAD_RES_TIME)
+                {
+                    yield return null;
+                    lastYiledTime = System.DateTime.Now.Ticks;
+                    haveYield = true;
+                }
+            }
+            if (!haveYield || System.DateTime.Now.Ticks - lastYiledTime > MAX_LOAD_RES_TIME)
+            {
+                lastYiledTime = System.DateTime.Now.Ticks;
+                yield return null;
+            }
+        }
+    }
+
 }
 
 /// <summary>
