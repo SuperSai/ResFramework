@@ -222,6 +222,10 @@ public class ResourceItem
     /// </summary>
     public float _lastUseTime = 0.0f;
     /// <summary>
+    /// 是否跳转场景清掉
+    /// </summary>
+    public bool _clear = true;
+    /// <summary>
     /// 引用计数
     /// </summary>
     protected int _refCount = 0;

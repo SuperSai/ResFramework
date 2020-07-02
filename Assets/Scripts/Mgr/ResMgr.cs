@@ -96,6 +96,72 @@ public class ResMgr : Singleton<ResMgr>
     }
 
     /// <summary>
+    /// 清空缓存
+    /// </summary>
+    public void ClearCache()
+    {
+        List<ResourceItem> tempList = new List<ResourceItem>();
+        foreach (ResourceItem item in assetDic.Values)
+        {
+            if (item._clear) tempList.Add(item);
+        }
+
+        foreach (ResourceItem item in tempList)
+        {
+            DestoryResourceItem(item, true);
+        }
+        tempList.Clear();
+        tempList = null;
+    }
+
+    /// <summary>
+    /// 预加载资源
+    /// </summary>
+    /// <param name="path"></param>
+    public void PreloadRes(string path)
+    {
+        if (string.IsNullOrEmpty(path)) return;
+        uint crc = CRC32.GetCRC32(path);
+        ResourceItem item = GetCancheResourceItem(crc, 0);
+        if (item != null) return;
+        Object obj = null;
+#if UNITY_EDITOR
+        if (!_loadFromAssetBundle)
+        {
+            item = ABMgr.Ins.FingResourceItem(crc);
+            if (item._obj != null)
+            {
+                obj = item._obj;
+            }
+            else
+            {
+                obj = LoadAssetByEditor<Object>(path);
+            }
+        }
+#endif
+        if (obj == null)
+        {
+            item = ABMgr.Ins.LoadResAssetBundle(crc);
+            if (item != null && item._assetBundle != null)
+            {
+                if (item._obj != null)
+                {
+                    obj = item._obj;
+                }
+                else
+                {
+                    obj = item._assetBundle.LoadAsset<Object>(item._assetName);
+                }
+            }
+        }
+
+        CacheResource(path, ref item, crc, obj);
+        //跳场景不清空缓存
+        item._clear = false;
+        ReleaseResouce(obj, false);
+    }
+
+    /// <summary>
     /// 同步资源加载，外部直接调用，仅加载不需要实例化的资源，例如:Texture，音频等等
     /// </summary>
     public T LoadResource<T>(string path) where T : UnityEngine.Object
@@ -167,6 +233,27 @@ public class ResMgr : Singleton<ResMgr>
     }
 
     /// <summary>
+    /// 不需要实例化的资源卸载
+    /// </summary>
+    /// <returns>bool</returns>
+    public bool ReleaseResouce(string path, bool destoryObj = false)
+    {
+        if (string.IsNullOrEmpty(path)) return false;
+
+        uint crc = CRC32.GetCRC32(path);
+
+        ResourceItem item = null;
+        if (!assetDic.TryGetValue(crc, out item) || item == null)
+        {
+            Debug.LogError("assetDic里不存在该资源：" + path + " 可能释放了多次！");
+        }
+
+        item.RefCount--;
+        DestoryResourceItem(item, destoryObj);
+        return true;
+    }
+
+    /// <summary>
     /// 缓存加载的资源
     /// </summary>
     private void CacheResource(string path, ref ResourceItem item, uint crc, Object obj, int addRefCount = 1)
@@ -219,13 +306,14 @@ public class ResMgr : Singleton<ResMgr>
     {
         if (item == null || item.RefCount > 0) return;
 
-        if (!assetDic.Remove(item._crc)) return;
-
         if (!destroyCache)
         {
-            _noRefrenceAssetMapList.InsertToHead(item);
+            //_noRefrenceAssetMapList.InsertToHead(item);
             return;
         }
+
+        if (!assetDic.Remove(item._crc)) return;
+
         //释放AB引用
         ABMgr.Ins.ReleaseAsset(item);
 
